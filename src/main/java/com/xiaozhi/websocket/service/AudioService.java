@@ -1,6 +1,9 @@
 package com.xiaozhi.websocket.service;
 
 import com.xiaozhi.utils.OpusProcessor;
+import org.bytedeco.ffmpeg.global.avutil;
+import org.bytedeco.javacv.FFmpegFrameGrabber;
+import org.bytedeco.javacv.Frame;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +18,9 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.nio.ByteBuffer;
+import java.nio.ShortBuffer;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Duration;
@@ -130,7 +136,7 @@ public class AudioService {
 
     /**
      * 初始化会话的音频处理
-     * 
+     *
      * @param sessionId WebSocket会话ID
      */
     public void initializeSession(String sessionId) {
@@ -142,7 +148,7 @@ public class AudioService {
 
     /**
      * 清理会话的音频处理状态
-     * 
+     *
      * @param sessionId WebSocket会话ID
      */
     public void cleanupSession(String sessionId) {
@@ -189,7 +195,7 @@ public class AudioService {
 
     /**
      * 处理音频文件，提取PCM数据并转换为Opus格式
-     * 
+     *
      * @param audioFilePath 音频文件路径
      * @param sampleRate    采样率
      * @param channels      通道数
@@ -219,7 +225,7 @@ public class AudioService {
 
     /**
      * 从音频文件中提取PCM数据
-     * 
+     *
      * @param audioFilePath 音频文件路径
      * @return PCM格式的音频数据
      */
@@ -227,30 +233,47 @@ public class AudioService {
         try {
             // 创建临时PCM文件
             File tempPcmFile = File.createTempFile("temp_pcm_extract_", ".pcm");
-            String tempPcmPath = tempPcmFile.getAbsolutePath();
-            try {
-                // 使用FFmpeg直接将音频转换为PCM
-                String[] command = {
-                        "ffmpeg",
-                        "-i", audioFilePath,
-                        "-f", "s16le", // 16位有符号小端格式
-                        "-acodec", "pcm_s16le",
-                        "-y",
-                        tempPcmPath
-                };
 
-                ProcessBuilder pb = new ProcessBuilder(command);
-                pb.redirectErrorStream(true);
-                Process process = pb.start();
-                // 等待进程完成
-                int exitCode = process.waitFor();
-                if (exitCode != 0) {
-                    logger.error("FFmpeg提取PCM数据失败，退出码: {}", exitCode);
-                    return null;
+            try (FFmpegFrameGrabber grabber = new FFmpegFrameGrabber(audioFilePath);
+                 FileOutputStream fileOut = new FileOutputStream(tempPcmFile)){
+
+                // 基本配置
+                grabber.setAudioChannels(DEFAULT_CHANNELS);
+                grabber.setSampleRate(DEFAULT_SAMPLE_RATE);
+                grabber.setSampleFormat(avutil.AV_SAMPLE_FMT_S16);
+                // 设置输出格式为16位有符号小端PCM
+                grabber.setAudioOption("acodec", "pcm_s16le");
+                grabber.setOption("ar", String.valueOf(DEFAULT_SAMPLE_RATE)); // 采样率
+                grabber.setOption("ac", String.valueOf(DEFAULT_CHANNELS));    // 通道数
+                // 启动grabber
+                grabber.start();
+
+                Frame audioFrame;
+                // 读取所有音频帧
+                while ((audioFrame = grabber.grabFrame(true, false, true, false)) != null) {
+                    if (audioFrame.samples == null || audioFrame.samples.length == 0) {
+                        continue;
+                    }
+                    // 处理ShortBuffer
+                    for (int i = 0; i < audioFrame.samples.length; i++) {
+                        ShortBuffer shortBuffer = (ShortBuffer) audioFrame.samples[i];
+                        shortBuffer.rewind();
+
+                        // 转换为字节数组
+                        ByteBuffer byteBuffer = ByteBuffer.allocate(shortBuffer.capacity() * 2);
+                        byteBuffer.order(java.nio.ByteOrder.LITTLE_ENDIAN); // 确保小端字节序
+
+                        while (shortBuffer.hasRemaining()) {
+                            byteBuffer.putShort(shortBuffer.get());
+                        }
+                        // 写入文件
+                        fileOut.write(byteBuffer.array());
+                    }
                 }
-
+                // 关闭输出流
+                fileOut.close();
                 // 读取PCM文件内容
-                return Files.readAllBytes(Paths.get(tempPcmPath));
+                return Files.readAllBytes(tempPcmFile.toPath());
             } finally {
                 // 删除临时文件
                 tempPcmFile.delete();
@@ -263,7 +286,7 @@ public class AudioService {
 
     /**
      * 计算音频时长
-     * 
+     *
      * @param pcmData    PCM格式的音频数据
      * @param sampleRate 采样率
      * @param channels   通道数
@@ -277,7 +300,7 @@ public class AudioService {
 
     /**
      * 发送音频消息
-     * 
+     *
      * @param session       WebSocket会话
      * @param audioFilePath 音频文件路径
      * @param text          文本内容
@@ -337,7 +360,7 @@ public class AudioService {
 
     /**
      * 处理音频队列中的任务
-     * 
+     *
      * @param session   WebSocket会话
      * @param sessionId 会话ID
      * @return 处理结果
@@ -422,7 +445,7 @@ public class AudioService {
 
     /**
      * 删除音频文件及其相关文件（如同名的VTT文件）
-     * 
+     *
      * @param audioPath 音频文件路径
      * @return 是否成功删除
      */
@@ -461,7 +484,7 @@ public class AudioService {
 
     /**
      * 发送TTS句子开始消息（包含文本）
-     * 
+     *
      * @param session WebSocket会话
      * @param text    句子文本
      * @return 操作结果
@@ -487,7 +510,7 @@ public class AudioService {
 
     /**
      * 发送TTS开始消息
-     * 
+     *
      * @param session WebSocket会话
      * @return 操作结果
      */
@@ -504,7 +527,7 @@ public class AudioService {
 
     /**
      * 发送TTS停止消息
-     * 
+     *
      * @param session WebSocket会话
      * @return 操作结果
      */
@@ -554,7 +577,7 @@ public class AudioService {
 
     /**
      * 立即停止音频发送，用于处理中断请求
-     * 
+     *
      * @param session WebSocket会话
      * @return 操作结果
      */

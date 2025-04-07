@@ -11,6 +11,9 @@ import java.nio.file.StandardCopyOption;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.bytedeco.javacv.FFmpegFrameGrabber;
+import org.bytedeco.javacv.FFmpegFrameRecorder;
+import org.bytedeco.javacv.Frame;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,15 +21,15 @@ import com.xiaozhi.websocket.tts.TtsService;
 
 public class EdgeTtsService implements TtsService {
     private static final Logger logger = LoggerFactory.getLogger(EdgeTtsService.class);
-    
+
     private static final String PROVIDER_NAME = "edge";
-   
+
     // 音频名称
     private String voiceName;
 
     // 音频输出路径
     private String outputPath;
-    
+
     public EdgeTtsService(String voiceName, String outputPath) {
         this.voiceName = voiceName;
         this.outputPath = outputPath;
@@ -50,7 +53,7 @@ public class EdgeTtsService implements TtsService {
         Voice voiceObj = TTSVoice.provides().stream()
                 .filter(v -> v.getShortName().equals(voiceName))
                 .collect(Collectors.toList()).get(0);
-        
+
         TTS ttsEngine = new TTS(voiceObj, text);
         // 执行TTS转换获取音频文件
         String audioFilePath = ttsEngine.findHeadHook()
@@ -66,34 +69,35 @@ public class EdgeTtsService implements TtsService {
 
         return outputPath + audioFilePath;
     }
-    
+
     /**
      * 使用FFmpeg将原始音频转换为指定采样率和通道数的MP3
      */
     private void convertAndSaveAudio(String audioFilePath, int sampleRate, int channels) throws Exception {
         // 创建临时文件路径
         String tempFilePath = audioFilePath + ".tmp";
-        // 使用FFmpeg直接转换音频
-        String[] command = {
-                "ffmpeg",
-                "-i", audioFilePath,
-                "-ar", String.valueOf(sampleRate),
-                "-ac", String.valueOf(channels),
-                "-acodec", "libmp3lame",
-                "-q:a", "2",
-                "-f", "mp3",
-                "-y", // 覆盖已存在的文件
-                tempFilePath
-        };
 
-        ProcessBuilder pb = new ProcessBuilder(command);
-        pb.redirectErrorStream(true);
-        Process process = pb.start();
-
-        // 等待进程完成
-        int exitCode = process.waitFor();
-        if (exitCode != 0) {
-            logger.error("FFmpeg转换音频失败，退出码: {}", exitCode);
+        // 使用FFmpegFrameGrabber读取原始音频
+        try(FFmpegFrameGrabber grabber = new FFmpegFrameGrabber(audioFilePath);
+            FFmpegFrameRecorder recorder = new FFmpegFrameRecorder(tempFilePath, channels)){
+            // 创建FFmpegFrameRecorder用于写入转换后的音频
+            recorder.setAudioChannels(channels);
+            recorder.setSampleRate(sampleRate);
+            recorder.setAudioCodec(org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_MP3);
+            recorder.setAudioQuality(2);
+            recorder.setFormat("mp3");
+            recorder.start();
+            // 开始读取音频
+            grabber.start();
+            // 转换并写入音频帧
+            Frame frame;
+            while ((frame = grabber.grab()) != null) {
+                if (frame.samples != null) {
+                    recorder.record(frame);
+                }
+            }
+        }catch (Exception e) {
+            logger.error("FFmpeg转换音频失败，e: {}", e.getMessage());
             throw new RuntimeException("音频转换失败");
         }
 
