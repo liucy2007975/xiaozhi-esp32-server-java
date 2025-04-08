@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import org.bytedeco.javacv.FFmpegFrameGrabber;
@@ -130,5 +131,11 @@ public class EdgeTtsService implements TtsService {
             logger.error("文件操作失败: " + e.getMessage(), e);
             throw new RuntimeException("文件操作失败", e);
         }
+    }
+
+    @Override
+    public void streamTextToSpeech(String text, Consumer<byte[]> audioDataConsumer) throws Exception {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'streamTextToSpeech'");
     }
 }
