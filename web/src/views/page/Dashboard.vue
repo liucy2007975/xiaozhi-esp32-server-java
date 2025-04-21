@@ -8,7 +8,7 @@
           <a-page-header
             :avatar="{
               props: {
-                src: userInfo.avatar,
+                src: userInfo.avatar ? getAvatarUrl(userInfo.avatar) : '',
                 class: 'page-header-content-avatar',
               },
               style:
@@ -32,7 +32,7 @@
             <div class="page-head-content-statistic">
               <a-statistic
                 title="对话次数"
-                :value="userInfo.messageNumber ? userInfo.messageNumber : 0"
+                :value="userInfo.totalMessage ? userInfo.totalMessage : 0"
                 style="padding: 0 25px; padding-left: 0; text-align: right"
               />
               <a-statistic
@@ -42,7 +42,7 @@
               />
               <a-statistic
                 title="总设备数"
-                :value="userInfo.totalDivce ? userInfo.totalDivce : 0"
+                :value="userInfo.totalDevice ? userInfo.totalDevice : 0"
                 style="padding: 0 25px; padding-right: 0; text-align: right"
               />
             </div>
@@ -75,7 +75,7 @@
                     >
                       <a-list-item key="messageId" slot-scope="{ item }">
                         <a-list-item-meta>
-                          <a-avatar slot="avatar" :src="item.avatar" />
+                          <a-avatar slot="avatar" :src="getAvatarUrl(item.avatar)" />
                           <span slot="title">{{ item.deviceName || name }}</span>
                           <template slot="description">
                             <p>{{ item.description }}</p>
@@ -105,6 +105,7 @@
                     :dataSource="data"
                     :pagination="{ pageSize: 5 }"
                     :loading=userLoading
+                    :scroll="{ x: 500 }"
                   >
                     <div
                       slot="filterDropdown"
@@ -194,6 +195,7 @@
 <script>
 import api from "@/services/api";
 import axios from "@/services/axios";
+import { getResourceUrl } from "@/services/axios";
 import mixin from "@/mixins/index";
 import Cookies from "js-cookie";
 import { jsonp } from 'vue-jsonp';
@@ -229,6 +231,7 @@ export default {
           title: "设备名称",
           dataIndex: "deviceName",
           name: "deviceName",
+          with: 100,
           scopedSlots: {
             filterDropdown: "filterDropdown",
             filterIcon: "filterIcon",
@@ -246,10 +249,11 @@ export default {
         },
         {
           title: "对话次数",
-          dataIndex: "total",
-          key: "total",
+          dataIndex: "totalMessage",
+          key: "totalMessage",
           align: "right",
-          sorter: (a, b) => a.total - b.total,
+          width: 100,
+          sorter: (a, b) => a.totalMessage - b.totalMessage,
         },
         {
           title: "在线状态",
@@ -260,10 +264,11 @@ export default {
         },
         {
           title: "上次对话时间",
-          dataIndex: "updateTime",
-          key: "updateTime",
+          dataIndex: "lastLogin",
+          key: "lastLogin",
           align: "right",
-          sorter: (a, b) => a.updateTime - b.updateTime,
+          width: 180,
+          sorter: (a, b) => a.lastLogin - b.lastLogin,
         },
       ],
       data: [],
@@ -289,8 +294,12 @@ export default {
     userInfo() {
       return this.$store.getters.USER_INFO;
     },
+    
   },
   methods: {
+    getAvatarUrl(avatar) {
+      return getResourceUrl(avatar);
+    },
     updateInformation() {
       this.form.validateFields((err, values) => {
         if (!err) {

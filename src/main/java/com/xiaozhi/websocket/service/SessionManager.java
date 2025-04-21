@@ -8,7 +8,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.socket.WebSocketSession;
 import reactor.core.publisher.Sinks;
 
+import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * WebSocket会话管理服务
@@ -17,6 +24,9 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class SessionManager {
     private static final Logger logger = LoggerFactory.getLogger(SessionManager.class);
+
+    // 设置不活跃超时时间为60秒
+    private static final long INACTIVITY_TIMEOUT_SECONDS = 60;
 
     // 用于存储所有连接的会话
     private final ConcurrentHashMap<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
@@ -34,6 +44,69 @@ public class SessionManager {
     // 用于跟踪会话是否正在进行流式识别
     private final ConcurrentHashMap<String, Boolean> streamingState = new ConcurrentHashMap<>();
 
+    // 存储验证码生成状态
+    private final ConcurrentHashMap<String, Boolean> captchaState = new ConcurrentHashMap<>();
+
+    // 存储每个会话的最后有效活动时间
+    private final ConcurrentHashMap<String, Instant> lastActivityTime = new ConcurrentHashMap<>();
+
+    // 定时任务执行器
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+
+    /**
+     * 初始化方法，启动定时检查不活跃会话的任务
+     */
+    @PostConstruct
+    public void init() {
+        // 每10秒检查一次不活跃的会话
+        scheduler.scheduleAtFixedRate(this::checkInactiveSessions, 10, 10, TimeUnit.SECONDS);
+        logger.info("不活跃会话检查任务已启动，超时时间: {}秒", INACTIVITY_TIMEOUT_SECONDS);
+    }
+
+    /**
+     * 销毁方法，关闭定时任务执行器
+     */
+    @PreDestroy
+    public void destroy() {
+        scheduler.shutdown();
+        try {
+            if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                scheduler.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            scheduler.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+        logger.info("不活跃会话检查任务已关闭");
+    }
+
+    /**
+     * 检查不活跃的会话并关闭它们
+     */
+    private void checkInactiveSessions() {
+        Instant now = Instant.now();
+        sessions.keySet().forEach(sessionId -> {
+            Instant lastActivity = lastActivityTime.get(sessionId);
+            if (lastActivity != null) {
+                Duration inactiveDuration = Duration.between(lastActivity, now);
+                if (inactiveDuration.getSeconds() > INACTIVITY_TIMEOUT_SECONDS) {
+                    logger.info("会话 {} 已经 {} 秒没有有效活动，自动关闭", sessionId, inactiveDuration.getSeconds());
+                    closeSession(sessionId);
+                }
+            }
+        });
+    }
+
+    /**
+     * 更新会话的最后有效活动时间
+     * 这个方法应该只在检测到实际的用户活动时调用，如语音输入或明确的交互
+     * 
+     * @param sessionId 会话ID
+     */
+    public void updateLastActivity(String sessionId) {
+        lastActivityTime.put(sessionId, Instant.now());
+    }
+
     /**
      * 注册新的WebSocket会话
      * 
@@ -44,6 +117,7 @@ public class SessionManager {
         sessions.put(sessionId, session);
         listeningState.put(sessionId, false);
         streamingState.put(sessionId, false);
+        updateLastActivity(sessionId); // 初始化活动时间
         logger.info("WebSocket会话已注册 - SessionId: {}", sessionId);
     }
 
@@ -53,10 +127,20 @@ public class SessionManager {
      * @param sessionId 会话ID
      */
     public void closeSession(String sessionId) {
+        // 关闭会话
+        WebSocketSession session = sessions.get(sessionId);
+        if (session != null) {
+            try {
+                session.close().subscribe();
+            } catch (Exception e) {
+                logger.error("关闭WebSocket会话时发生错误 - SessionId: {}", sessionId, e);
+            }
+        }
         sessions.remove(sessionId);
         SysDevice device = deviceConfigs.remove(sessionId);
         listeningState.remove(sessionId);
         streamingState.remove(sessionId);
+        lastActivityTime.remove(sessionId); // 清理活动时间记录
 
         // 清理音频流
         Sinks.Many<byte[]> sink = audioSinks.remove(sessionId);
@@ -74,7 +158,13 @@ public class SessionManager {
      * @param device    设备信息
      */
     public void registerDevice(String sessionId, SysDevice device) {
+        // 先检查是否已存在该sessionId的配置
+        SysDevice existingDevice = deviceConfigs.get(sessionId);
+        if (existingDevice != null) {
+            deviceConfigs.remove(sessionId);
+        }
         deviceConfigs.put(sessionId, device);
+        updateLastActivity(sessionId); // 更新活动时间
         logger.debug("设备配置已注册 - SessionId: {}, DeviceId: {}", sessionId, device.getDeviceId());
     }
 
@@ -98,6 +188,21 @@ public class SessionManager {
      */
     public WebSocketSession getSession(String sessionId) {
         return sessions.get(sessionId);
+    }
+
+    /**
+     * 获取会话
+     * 
+     * @param deviceId 设备ID
+     * @return 会话ID
+     */
+    public String getSessionByDeviceId(String deviceId) {
+        for (String key : deviceConfigs.keySet()) {
+            if (deviceConfigs.get(key).getDeviceId().equals(deviceId)) {
+                return key;
+            }
+        }
+        return null;
     }
 
     /**
@@ -128,6 +233,7 @@ public class SessionManager {
      */
     public void setListeningState(String sessionId, boolean isListening) {
         listeningState.put(sessionId, isListening);
+        updateLastActivity(sessionId); // 更新活动时间
     }
 
     /**
@@ -148,6 +254,7 @@ public class SessionManager {
      */
     public void setStreamingState(String sessionId, boolean isStreaming) {
         streamingState.put(sessionId, isStreaming);
+        updateLastActivity(sessionId); // 更新活动时间
     }
 
     /**
@@ -169,6 +276,7 @@ public class SessionManager {
     public Sinks.Many<byte[]> createAudioSink(String sessionId) {
         Sinks.Many<byte[]> sink = Sinks.many().multicast().onBackpressureBuffer();
         audioSinks.put(sessionId, sink);
+        updateLastActivity(sessionId); // 更新活动时间
         return sink;
     }
 
@@ -192,5 +300,25 @@ public class SessionManager {
         if (sink != null) {
             sink.tryEmitComplete();
         }
+        updateLastActivity(sessionId); // 更新活动时间
+    }
+
+    /**
+     * 标记设备正在生成验证码
+     * 
+     * @param deviceId 设备ID
+     * @return 如果设备之前没有在生成验证码，返回true；否则返回false
+     */
+    public boolean markCaptchaGeneration(String deviceId) {
+        return captchaState.putIfAbsent(deviceId, Boolean.TRUE) == null;
+    }
+
+    /**
+     * 取消设备验证码生成标记
+     * 
+     * @param deviceId 设备ID
+     */
+    public void unmarkCaptchaGeneration(String deviceId) {
+        captchaState.remove(deviceId);
     }
 }

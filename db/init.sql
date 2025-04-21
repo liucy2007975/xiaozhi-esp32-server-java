@@ -1,3 +1,7 @@
+-- 在文件顶部添加以下语句
+SET NAMES utf8mb4;
+SET CHARACTER SET utf8mb4;
+
 -- 创建本地用户并设置密码（使用mysql_native_password插件）
 CREATE USER IF NOT EXISTS 'xiaozhi'@'localhost' IDENTIFIED WITH mysql_native_password BY '123456';
 
@@ -28,11 +32,12 @@ CREATE TABLE `xiaozhi`.`sys_user` (
   `password` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tel` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `email` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `avatar` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '头像',
   `state` enum('1','0') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '1' COMMENT '1-正常 0-禁用',
   `loginIp` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `isAdmin` enum('1','0') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `loginTime` datetime DEFAULT NULL,
-  `name` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `createTime` datetime DEFAULT CURRENT_TIMESTAMP,
   `updateTime` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`userId`),
@@ -41,9 +46,9 @@ CREATE TABLE `xiaozhi`.`sys_user` (
 
 -- Insert admin user only if it doesn't exist
 INSERT INTO xiaozhi.sys_user (username, password, state, isAdmin, name, createTime, updateTime)
-SELECT 'admin', '11cd9c061d614dcf37ec60c44c11d2ad', '1', '1', '小智', '2025-03-09 18:32:29', '2025-03-09 18:32:35'
-FROM dual
-WHERE NOT EXISTS (SELECT 1 FROM xiaozhi.sys_user WHERE username = 'admin');
+VALUES ('admin', '11cd9c061d614dcf37ec60c44c11d2ad', '1', '1', '小智', '2025-03-09 18:32:29', '2025-03-09 18:32:35');
+
+update sys_user set name = '小智' where username = 'admin';
 
 -- xiaozhi.sys_device definition
 DROP TABLE IF EXISTS `xiaozhi`.`sys_device`;
@@ -104,8 +109,9 @@ DROP TABLE IF EXISTS `xiaozhi`.`sys_code`;
 CREATE TABLE `xiaozhi`.`sys_code` (
   `codeId` int unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
   `code` varchar(100) NOT NULL COMMENT '验证码',
-  `deviceId` varchar(30) NOT NULL COMMENT '设备ID',
-  `sessionId` varchar(100) NOT NULL COMMENT 'sessionID',
+  `email` varchar(100) DEFAULT NULL COMMENT '邮箱',
+  `deviceId` varchar(30) DEFAULT NULL COMMENT '设备ID',
+  `sessionId` varchar(100) DEFAULT NULL COMMENT 'sessionID',
   `audioPath` text COMMENT '语音文件路径',
   `createTime` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`codeId`)
@@ -117,7 +123,7 @@ CREATE TABLE `xiaozhi`.`sys_config` (
   `configId` int unsigned NOT NULL AUTO_INCREMENT COMMENT '配置ID，主键',
   `userId` int NOT NULL COMMENT '创建用户ID',
   `configType` varchar(30) NOT NULL COMMENT '配置类型(llm, stt, tts等)',
-  `provider` varchar(30) NOT NULL COMMENT '服务提供商(openai, qwen, vosk, aliyun, tencent等)',
+  `provider` varchar(30) NOT NULL COMMENT '服务提供商(openai, vosk, aliyun, tencent等)',
   `configName` varchar(50) NOT NULL COMMENT '配置名称',
   `configDesc` TEXT DEFAULT NULL COMMENT '配置描述',
   `appId` varchar(100) DEFAULT NULL COMMENT 'APP ID',

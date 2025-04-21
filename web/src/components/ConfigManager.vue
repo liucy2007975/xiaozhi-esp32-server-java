@@ -67,10 +67,22 @@
                   </a-col>
                   <a-col :xl="16" :lg="12" :xs="24">
                     <a-form-item :label="`${configTypeInfo.label}名称`">
-                      <a-input v-decorator="[
-                        'configName',
-                        { rules: [{ required: true, message: `请输入${configTypeInfo.label}名称` }] }
-                      ]" autocomplete="off" :placeholder="`请输入${configTypeInfo.label}名称`" />
+                      <!-- 修改这里，添加模型名称提示 -->
+                      <a-tooltip 
+                        v-if="configType === 'llm' && currentType && getModelNameTip(currentType)"
+                        :title="getModelNameTip(currentType)"
+                        placement="top">
+                        <a-input v-decorator="[
+                          'configName',
+                          { rules: [{ required: true, message: `请输入${configTypeInfo.label}名称` }] }
+                        ]" autocomplete="off" :placeholder="`请输入${configTypeInfo.label}名称`" />
+                      </a-tooltip>
+                      <a-input 
+                        v-else
+                        v-decorator="[
+                          'configName',
+                          { rules: [{ required: true, message: `请输入${configTypeInfo.label}名称` }] }
+                        ]" autocomplete="off" :placeholder="`请输入${configTypeInfo.label}名称`" />
                     </a-form-item>
                   </a-col>
                 </a-row>
@@ -158,6 +170,13 @@ export default {
       currentType: '',
       loading: false,
 
+      // 模型名称提示信息
+      modelNameTips: {
+        openai: "请输入要调用的模型名称，如：gpt-3.5-turbo, gpt-4, qwen-max, deepseek-chat等",
+        ollama: "请输入要调用的Ollama模型名称，如：deepseek-r1, qwen2.5:7b, gemma3:12b等",
+        spark: "请输入星火大模型官方模型名称，如：Lite, Pro, Max等"
+      },
+
       // 配置类型信息
       configTypeMap: {
         llm: {
@@ -166,8 +185,7 @@ export default {
           typeOptions: [
             { label: 'OpenAI', value: 'openai', key: '0' },
             { label: 'Ollama', value: 'ollama', key: '1' },
-            { label: 'Qwen', value: 'qwen', key: '2' },
-            { label: 'Spark', value: 'spark', key: '3' }
+            { label: 'Spark', value: 'spark', key: '2' }
           ],
           // 各类别对应的参数字段定义
           typeFields: {
@@ -178,13 +196,9 @@ export default {
             ollama: [
               { name: 'apiUrl', label: 'API URL', required: false, span: 12, suffix: '/api/chat' }
             ],
-            qwen: [
-              { name: 'apiKey', label: 'API Key', required: true, span: 12 },
-              { name: 'apiUrl', label: 'API URL', required: false, span: 12, suffix: '/chat/completions' }
-            ],
             spark: [
               { name: 'apiSecret', label: 'API Secret', required: true, span: 8 },
-              { name: 'apiUrl', label: 'API URL', required: false, span: 12, suffix: '/chat/completions' }
+              { name: 'apiUrl', label: 'API URL', required: false, span: 12, suffix: '/chat/completions', defaultUrl:"https://spark-api-open.xf-yun.com/v2" }
             ]
           }
         },
@@ -308,6 +322,11 @@ export default {
     this.getData()
   },
   methods: {
+    // 获取模型名称提示
+    getModelNameTip(providerType) {
+      return this.configType === 'llm' ? this.modelNameTips[providerType] : null;
+    },
+    
     // 处理标签页切换
     handleTabChange(key) {
       this.activeTabKey = key;
@@ -336,6 +355,12 @@ export default {
       allParamFields.forEach(field => {
         newValues[field] = undefined;
       });
+
+      //填写llm默认url
+      if(this.configType === 'llm') {
+        newValues.apiUrl = this.configTypeMap.llm.typeFields[value].find(item=>item.name === 'apiUrl').defaultUrl
+      }
+
       // 重置表单
       this.$nextTick(() => {
         // 设置新的表单值

@@ -23,10 +23,13 @@ public class WebFluxConfig implements WebFluxConfigurer {
     @Bean
     public CorsWebFilter corsWebFilter() {
         CorsConfiguration corsConfig = new CorsConfiguration();
-        corsConfig.addAllowedOrigin("*");
+        corsConfig.addAllowedOriginPattern("*");
         corsConfig.addAllowedMethod("*");
         corsConfig.addAllowedHeader("*");
+        corsConfig.setAllowCredentials(true);
         corsConfig.setMaxAge(3600L);
+        corsConfig.addExposedHeader("Access-Control-Allow-Origin");
+        corsConfig.addExposedHeader("Access-Control-Allow-Credentials");
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", corsConfig);
@@ -45,10 +48,16 @@ public class WebFluxConfig implements WebFluxConfigurer {
 
             // 音频文件存储在项目根目录下的audio文件夹中
             String audioPath = "file:" + basePath + File.separator + "audio" + File.separator;
+            String avatarPath = "file:" + basePath + File.separator + "avatar" + File.separator;
 
             // 配置资源映射
             registry.addResourceHandler("/audio/**")
                     .addResourceLocations(audioPath)
+                    .setCacheControl(CacheControl.maxAge(Duration.ofHours(1)));
+
+            // 配置头像资源映射
+            registry.addResourceHandler("/avatar/**")
+                    .addResourceLocations(avatarPath)
                     .setCacheControl(CacheControl.maxAge(Duration.ofHours(1)));
         } catch (Exception e) {
             e.printStackTrace();

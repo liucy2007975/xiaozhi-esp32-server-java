@@ -74,6 +74,9 @@ public class AudioService {
     @Autowired
     private OpusProcessor opusProcessor;
 
+    @Autowired
+    private SessionManager sessionManager;
+
     private final DataBufferFactory bufferFactory = new DefaultDataBufferFactory();
 
     /**
@@ -205,6 +208,7 @@ public class AudioService {
         sessionMessageCounters.putIfAbsent(sessionId, new AtomicInteger(0));
         sessionStreamingQueues.putIfAbsent(sessionId, new ConcurrentLinkedQueue<>());
         sessionStreamingFlags.putIfAbsent(sessionId, new AtomicBoolean(false));
+        sessionManager.updateLastActivity(sessionId);
     }
 
     /**
@@ -275,7 +279,7 @@ public class AudioService {
      * @param channels      通道数
      * @return 处理结果，包含opus数据和持续时间
      */
-    public AudioProcessResult processAudioFile(String audioFilePath, int sampleRate, int channels) {
+    public AudioProcessResult processAudioFile(String sessionId, String audioFilePath, int sampleRate, int channels) {
         try {
             // 从音频文件获取PCM数据
             byte[] pcmData = extractPcmFromAudio(audioFilePath);
@@ -288,7 +292,7 @@ public class AudioService {
             long durationMs = calculateAudioDuration(pcmData, sampleRate, channels);
 
             // 转换为Opus格式
-            List<byte[]> opusFrames = opusProcessor.convertPcmToOpus(pcmData, sampleRate, channels, FRAME_DURATION_MS);
+            List<byte[]> opusFrames = opusProcessor.convertPcmToOpus(sessionId, pcmData, sampleRate, channels, FRAME_DURATION_MS);
 
             return new AudioProcessResult(opusFrames, durationMs);
         } catch (Exception e) {
@@ -393,7 +397,7 @@ public class AudioService {
         int sequenceNumber = sessionMessageCounters.get(sessionId).incrementAndGet();
 
         // 处理音频文件，转换为Opus格式
-        return Mono.fromCallable(() -> processAudioFile(audioFilePath, DEFAULT_SAMPLE_RATE, DEFAULT_CHANNELS))
+        return Mono.fromCallable(() -> processAudioFile(sessionId, audioFilePath, DEFAULT_SAMPLE_RATE, DEFAULT_CHANNELS))
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(audioResult -> {
                     // 将任务添加到队列
@@ -521,7 +525,7 @@ public class AudioService {
                     int optimalFrameSize = (sampleRate * channels * bytesPerSample * FRAME_DURATION_MS) / 1000;
 
                     // 将PCM数据转换为Opus格式，确保帧大小合适
-                    List<byte[]> opusFrames = opusProcessor.convertPcmToOpus(pcmData, sampleRate, channels,
+                    List<byte[]> opusFrames = opusProcessor.convertPcmToOpus(sessionId, pcmData, sampleRate, channels,
                             FRAME_DURATION_MS);
 
                     // 将每一帧添加到Sink
@@ -687,33 +691,36 @@ public class AudioService {
         if (audioPath == null) {
             return false;
         }
-
-        try {
-            boolean success = true;
-
-            // 删除原始音频文件
-            File audioFile = new File(audioPath);
-            if (audioFile.exists()) {
-                if (!audioFile.delete()) {
-                    logger.warn("无法删除音频文件: {}", audioPath);
-                    success = false;
-                }
-            }
-
-            // 删除可能存在的VTT文件
-            File vttFile = new File(audioPath + ".vtt");
-            if (vttFile.exists()) {
-                if (!vttFile.delete()) {
-                    logger.warn("无法删除VTT文件: {}", vttFile.getPath());
-                    success = false;
-                }
-            }
-
-            return success;
-        } catch (Exception e) {
-            logger.error("删除音频文件时发生错误: {}", audioPath, e);
-            return false;
-        }
+        // 这边后续应该把所有音频文件合并起来，先不删除音频文件
+        return true;
+        /*
+         * try {
+         * boolean success = true;
+         * 
+         * // 删除原始音频文件
+         * File audioFile = new File(audioPath);
+         * if (audioFile.exists()) {
+         * if (!audioFile.delete()) {
+         * logger.warn("无法删除音频文件: {}", audioPath);
+         * success = false;
+         * }
+         * }
+         * 
+         * // 删除可能存在的VTT文件
+         * File vttFile = new File(audioPath + ".vtt");
+         * if (vttFile.exists()) {
+         * if (!vttFile.delete()) {
+         * logger.warn("无法删除VTT文件: {}", vttFile.getPath());
+         * success = false;
+         * }
+         * }
+         * 
+         * return success;
+         * } catch (Exception e) {
+         * logger.error("删除音频文件时发生错误: {}", audioPath, e);
+         * return false;
+         * }
+         */
     }
 
     /**

@@ -40,6 +40,10 @@ Server端采用 Spring Boot 框架，前端采用 Vue.js 框架，全局响应�
   - 历史对话总结\摘要功能。
   - 支持手动操作对话记录。
 
+### 7. **智能体与音色克隆**
+  - 对接Coze与Dify等智能体平台，实现设备添加与修改智能体功能。
+  - 支持音色克隆功能，允许用户上传音频文件进行音色克隆。
+
 
 ## UI样式
 <div align="center">
@@ -67,17 +71,25 @@ Server端采用 Spring Boot 框架，前端采用 Vue.js 框架，全局响应�
 - **阶段 1**：实现基础功能（设备管理、音色选择、聊天记录查看）。（已完成）
 - **阶段 2**：完善用户管理、唤醒词修改、日志管理模块。
 - **阶段 3**：增加数据可视化功能、增加流式对话记录。
+- **阶段 4**：智能体与音色克隆。
 
 ---
 
 ## 使用方式
 
-### 1. 本地源码运行
-点击此处查看[部署文档](./docs/DEVELOPMENT.md)
+### 1. 本地源码运行（该文档由群友 汇合 提供）
+[点击此处查看Windows部署文档](./docs/WINDOWS_DEVELOPMENT.md)
+
+[点击此处查看Centos部署文档](./docs/CENTOS_DEVELOPMENT.md)
 
 成功运行后，控制台会输出 WebSocket 连接地址，根据下方固件编译文档使设备接入服务使用。
 
-### 2. 固件编译
+### 2. Docker部署（该文档由群友 💍Mr_li 提供）
+[点击此处查看Docker部署文档](./docs/DOCKER.md)
+
+成功启动后，WebSocket 连接要通过宿主IP进行通信，例如：ws://192.168.31.100:8091/ws/xiaozhi/v1/
+
+### 3. 固件编译
 点这里查看[固件编译](./docs/FIRMWARE-BUILD.md)的详细过程。
 
 烧录成功且联网成功后，通过唤醒词唤醒小智，留意server端输出的控制台信息。
@@ -88,10 +100,25 @@ Server端采用 Spring Boot 框架，前端采用 Vue.js 框架，全局响应�
 
 欢迎任何形式的贡献！如果你有好的想法或发现问题，请联系反馈
 
+可以加我微信备注 小智 Server 我拉你进微信群
+
+接各种定制化开发项目，如果你有定制化需求也可以加我微信沟通
+
 <img src="./web/static/img/wechat.jpg" alt="微信" width="200" />
 
-也欢迎加入我们的微信交流群，一起讨论和分享。
+也欢迎加入我们的QQ一起来讨论，QQ群号：790820705
 
-<img src="docs/images/wechat_group.jpg" alt="微信" width="200" />
+<img src="./web/static/img/qq.jpg" alt="qq" width="200" />
+
 
 ---
+
+## Star History
+
+<a href="https://www.star-history.com/#joey-zhou/xiaozhi-esp32-server-java&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=joey-zhou/xiaozhi-esp32-server-java&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=joey-zhou/xiaozhi-esp32-server-java&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=joey-zhou/xiaozhi-esp32-server-java&type=Date" />
+ </picture>
+</a>

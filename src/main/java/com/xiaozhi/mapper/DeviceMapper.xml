@@ -28,7 +28,8 @@
         <include refid="roleSql"></include>,
         <include refid="modelSql"></include>,
         <include refid="sttSql"></include>,
-        <include refid="ttsSql"></include>
+        <include refid="ttsSql"></include>,
+        (SELECT COUNT(*) FROM sys_message WHERE sys_message.deviceId = sys_device.deviceId AND sys_message.state = '1') AS totalMessage
         FROM
             sys_device
             LEFT JOIN sys_role ON sys_device.roleId = sys_role.roleId
@@ -53,6 +54,7 @@
             <if test="deviceId != null and deviceId != ''">AND deviceId = #{deviceId}</if>
             <if test="sessionId != null and sessionId != ''">AND sessionId = #{sessionId}</if>
             <if test="code != null and code != ''">AND code = #{code}</if>
+            AND createTime &gt;= DATE_SUB(NOW(),INTERVAL 10 MINUTE)
             ORDER BY createTime DESC
         LIMIT 1
     </select>

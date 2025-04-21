@@ -7,7 +7,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
@@ -25,9 +24,6 @@ public class VadService {
 
     @Autowired
     private OpusProcessor opusDecoder;
-
-    @Autowired
-    private ResourceLoader resourceLoader;
 
     // 注入SileroVadModel
     @Autowired
@@ -265,7 +261,7 @@ public class VadService {
                 VadSessionState state = sessionStates.computeIfAbsent(sessionId, k -> new VadSessionState());
 
                 // 解码Opus数据为PCM
-                byte[] pcmData = opusDecoder.decodeOpusFrameToPcm(opusData);
+                byte[] pcmData = opusDecoder.decodeOpusFrameToPcm(sessionId, opusData);
                 if (pcmData == null || pcmData.length == 0) {
                     return new VadResult(VadStatus.NO_SPEECH, null);
                 }
